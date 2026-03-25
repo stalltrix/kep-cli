@@ -15,6 +15,7 @@ import (
 	"flag"
 	"github.com/stalltrix/kep-cli/keygen"
 	"encoding/base32"
+	"hash/fnv"
 )
 
 func unix40() []byte {
@@ -33,7 +34,7 @@ func mustWrite(name string, data []byte) error {
 }
 
 func main() {
-	act := flag.String("act", "", "tool action [send/gen/base32/newkey]")
+	act := flag.String("act", "", "tool action [send/gen/base32/newkey/des]")
     nextAddr := flag.String("addr", "http://127.0.0.1:8888", "send msg addr")
 	nextAuth := flag.String("auth", "12345678", "send msg auth")
 	pkeyN := flag.String("pkey", "pkey", "pkey name")
@@ -96,6 +97,17 @@ func main() {
 		fmt.Println("new pkey generation complete")
 		fmt.Println(pkey_name+".pub    :", hex.EncodeToString(pub))
 		fmt.Println(pkey_name+".sig    :", hex.EncodeToString(signKey))
+	}
+	case "des":{
+        data, err := os.ReadFile(pkey_name+".pub")
+		if err != nil {
+			fmt.Println(pkey_name+".pub:",err)
+			return
+		}
+		h := fnv.New64a()
+		h.Write(data)
+		new_des:=h.Sum64()
+		fmt.Println("pkey des:",fmt.Sprintf("%x", new_des))
 	}
     default:
         fmt.Println("usage:\n\t-act [send/gen/base32/newkey] -pkey [pkeyName] -addr [http://web] -auth [token]")
