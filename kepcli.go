@@ -110,7 +110,7 @@ func main() {
 		fmt.Println("pkey des:",fmt.Sprintf("%x", new_des))
 	}
     default:
-        fmt.Println("usage:\n\t-act [send/gen/base32/newkey] -pkey [pkeyName] -addr [http://web] -auth [token]")
+        fmt.Println("usage:\n\t-act [send/gen/base32/newkey/des] -pkey [pkeyName] -addr [http://web] -auth [token]")
     }
 }
 func sendmsg(nextroute []send.NextMsg){
