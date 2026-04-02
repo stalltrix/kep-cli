@@ -16,6 +16,10 @@ import (
 	"github.com/stalltrix/kep-cli/keygen"
 	"encoding/base32"
 	"hash/fnv"
+	"net/url"
+	"net/http"
+	"io"
+	"path/filepath"
 )
 
 func unix40() []byte {
@@ -34,10 +38,13 @@ func mustWrite(name string, data []byte) error {
 }
 
 func main() {
-	act := flag.String("act", "", "tool action [send/gen/base32/newkey/des]")
-    nextAddr := flag.String("addr", "http://127.0.0.1:8888", "send msg addr")
-	nextAuth := flag.String("auth", "12345678", "send msg auth")
+	act := flag.String("act", "", "tool action [send/gen/base32/newkey/des/api/chk]")
+    nextAddr := flag.String("addr", "http://127.0.0.1:8888", "send msg/api addr")
+	nextAuth := flag.String("auth", "12345678", "send msg/api auth")
 	pkeyN := flag.String("pkey", "pkey", "pkey name")
+	apiSvc := flag.String("svc", "neighbor", "api service name")
+	apiReq := flag.String("req", "list", "api request name")
+	Ner_opt := flag.String("opt", "", "api set key(optional) [key=123456789&rpm=60&url=http://yoururl]")
 	flag.Parse()
 	pkey_name:=*pkeyN
 
@@ -109,8 +116,116 @@ func main() {
 		new_des:=h.Sum64()
 		fmt.Println("pkey des:",fmt.Sprintf("%x", new_des))
 	}
+	case "api":{
+        apiAddr:=*nextAddr
+		apiToken:=*nextAuth
+		if len(apiToken)<8{
+			fmt.Println("api token err")
+			return
+		}
+		if apiAddr == "http://127.0.0.1:8888" {
+			apiAddr="10428"
+		}
+		if !strings.HasPrefix(apiAddr,"http"){
+			if apiAddr == "" {
+				apiAddr = "http://127.222.1.16:10428"
+			} else {
+				apiAddr = "http://127.222.1.16:"+apiAddr
+			}
+		}
+		
+		if *apiSvc != "neighbor" {
+			url := apiAddr+"/local/api/interface?svc="+*apiSvc+"&req="+url.QueryEscape(*apiReq)+"&token="+apiToken
+			resp, err := http.Get(url)
+			if err != nil {
+				fmt.Println("request api err:",err)
+				return
+			}
+			body, err := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if err != nil {
+				fmt.Println("send api request err:",err)
+				return
+			}
+			fmt.Println("api:",string(body))
+			return
+		}
+		
+		opt_key,err:= url.ParseQuery(*Ner_opt)
+		if err != nil {
+			fmt.Println("resolv opt key err:",err)
+			return
+		}
+		
+		key:=opt_key.Get("key")
+		if key == "" && *apiReq=="list" {
+			key="123456789"
+		}
+		rpm:=opt_key.Get("rpm")
+		if rpm == "" {
+			rpm="60"
+		}
+		seturl:=url.QueryEscape(opt_key.Get("url"))
+		
+		if key==""{
+			fmt.Println("ERR: neighbor key is null")
+			return
+		}
+		
+		url := apiAddr+"/local/api/interface?svc=neighbor&req="+url.QueryEscape(*apiReq)+"&token="+apiToken+"&key="+url.QueryEscape(key)
+		
+		if seturl!=""{
+			url += "&url="+seturl+"&rpm="+rpm
+		}
+		resp, err := http.Get(url)
+		if err != nil {
+			fmt.Println("request api err:",err)
+			return
+		}
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			fmt.Println("send api request err:",err)
+			return
+		}
+		fmt.Println("api:",string(body))
+	}
+	case "chk":{
+		exePath, err := os.Executable()
+		if err != nil {
+			fmt.Println("ERR: read path err:",err)
+			return
+		}
+        BaseDir := filepath.Join(filepath.Dir(exePath), "kep-data")
+        files, err := filepath.Glob(filepath.Join(BaseDir, "tag_*.idx"))
+		if err != nil {
+			fmt.Println("ERR: read index err:",err)
+			return
+		}
+		if len(files)==0{
+			fmt.Println("ERR: index file not found, path:",BaseDir)
+			return
+		}
+		for _, f := range files {
+			fmt.Println("INFO: check index:",f)
+			data, err := os.ReadFile(f)
+			if err != nil {
+				fmt.Println("ERR: read index file:",err)
+				return
+			}
+			if len(data)%65!=0{
+				fmt.Println("ERR: index length err ,file:",f)
+				return
+			}
+			if bytes.Contains(data, []byte("\r")) || bytes.Contains(data, []byte("\n\n")) {
+				fmt.Println("ERR: index format err ,file:",f)
+				return
+			}
+		}
+		fmt.Println("Done: check index: ALL file is OK")
+	}
     default:
-        fmt.Println("usage:\n\t-act [send/gen/base32/newkey/des] -pkey [pkeyName] -addr [http://web] -auth [token]")
+        fmt.Println("usage:\n\t-act [send/gen/base32/newkey/des/api/chk] -pkey [pkeyName] -addr [http://web] -auth [token]")
     }
 }
 func sendmsg(nextroute []send.NextMsg){
