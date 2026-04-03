@@ -20,6 +20,8 @@ import (
 	"net/http"
 	"io"
 	"path/filepath"
+	"github.com/stalltrix/kep-demo/kepdb"
+	"github.com/stalltrix/kep-demo/kepresolv"
 )
 
 func unix40() []byte {
@@ -38,12 +40,12 @@ func mustWrite(name string, data []byte) error {
 }
 
 func main() {
-	act := flag.String("act", "", "tool action [send/gen/base32/newkey/des/api/chk]")
+	act := flag.String("act", "", "tool action [send/gen/base32/newkey/des/api/chk/read]")
     nextAddr := flag.String("addr", "http://127.0.0.1:8888", "send msg/api addr")
 	nextAuth := flag.String("auth", "12345678", "send msg/api auth")
 	pkeyN := flag.String("pkey", "pkey", "pkey name")
 	apiSvc := flag.String("svc", "neighbor", "api service name")
-	apiReq := flag.String("req", "list", "api request name")
+	apiReq := flag.String("req", "", "api/read request name")
 	Ner_opt := flag.String("opt", "", "api set key(optional) [key=123456789&rpm=60&url=http://yoururl]")
 	flag.Parse()
 	pkey_name:=*pkeyN
@@ -120,7 +122,11 @@ func main() {
         apiAddr:=*nextAddr
 		apiToken:=*nextAuth
 		if len(apiToken)<8{
-			fmt.Println("api token err")
+			fmt.Println("api token is null")
+			return
+		}
+		if *apiReq==""{
+			fmt.Println("api request is null")
 			return
 		}
 		if apiAddr == "http://127.0.0.1:8888" {
@@ -224,8 +230,51 @@ func main() {
 		}
 		fmt.Println("Done: check index: ALL file is OK")
 	}
+	case "read":{
+		exePath, err := os.Executable()
+		if err != nil {
+			fmt.Println("find path err:",err)
+			return
+        }
+		kepdb.Init_path(filepath.Dir(exePath))
+		if len(*apiReq)!=64 {
+			fmt.Println("read post err: hash not found,",*apiReq)
+			return
+		}
+		hexs,err:=kepdb.ReadHash(*apiReq)
+		if err !=nil {
+			fmt.Println("read post err:",err)
+			return
+		}
+		txt,domain,timestamp,point_to,perm,key,_,tag,root,tag2,err:=kepresolv.Resolv(hexs)
+		if err !=nil {
+			fmt.Println("resolv post err:",err)
+			return
+		}
+		pointTo:=hex.EncodeToString(point_to)
+		if pointTo == ""{
+			pointTo="null"
+		}
+		Root:=hex.EncodeToString(root)
+		if Root == ""{
+			Root="null"
+		}
+		t := time.Unix(timestamp, 0).Local()
+		fmt.Println("\n===========post info===========\n")
+		fmt.Println("user:",string(domain))
+		fmt.Println("timestamp:",t.Format("2006-01-02 15:04:05"))
+		fmt.Println("point to:",pointTo)
+		fmt.Println("perm:",perm)
+		fmt.Println("key:",key)
+		fmt.Println("tag:",tag)
+		fmt.Println("root:",Root)
+		fmt.Println("tag2:",tag2)
+		fmt.Println("\n===========post text===========\n")
+		fmt.Println(string(txt))
+		return
+	}
     default:
-        fmt.Println("usage:\n\t-act [send/gen/base32/newkey/des/api/chk] -pkey [pkeyName] -addr [http://web] -auth [token]")
+        fmt.Println("usage:\n\t-act [send/gen/base32/newkey/des/api/chk/read] -pkey [pkeyName] -addr [http://web] -auth [token]")
     }
 }
 func sendmsg(nextroute []send.NextMsg){
