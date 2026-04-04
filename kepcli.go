@@ -246,10 +246,35 @@ func main() {
 			fmt.Println("read post err:",err)
 			return
 		}
-		txt,domain,timestamp,point_to,perm,key,_,tag,root,tag2,err:=kepresolv.Resolv(hexs)
+		data,err:=kepresolv.Resolv(hexs)
 		if err !=nil {
 			fmt.Println("resolv post err:",err)
 			return
+		}
+		txt:=data.Atxt
+		domain:=data.Adomain
+		timestamp:=data.Atimestamp
+		point_to:=data.Apoint_to
+		perm:=data.Aperm
+		key:=data.Akey_des
+		tag:=data.Atag
+		root:=data.Aroot
+		tag2:=data.Atag2
+		subs,err:=kepdb.ReadSub(*apiReq)
+		if err == nil {
+			for _,sub:=range subs {
+				sub_hexs,err:=kepdb.ReadHash(sub)
+				if err !=nil {
+					fmt.Println("read sub err:",err)
+					continue;
+				}
+				dat,err:=kepresolv.Resolv(sub_hexs)
+				if err ==nil {
+					if dat.Atag == 65534 {
+						if (dat.Atimestamp > timestamp) && (dat.Akey_des == key) && bytes.Equal(domain,dat.Adomain) {timestamp=dat.Atimestamp;txt=dat.Atxt;perm=dat.Aperm;}
+					}
+				}
+			}
 		}
 		pointTo:=hex.EncodeToString(point_to)
 		if pointTo == ""{
