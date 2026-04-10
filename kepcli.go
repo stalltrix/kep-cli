@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"github.com/stalltrix/kep-demo/kepdb"
 	"github.com/stalltrix/kep-demo/kepresolv"
+	"strconv"
 )
 
 func unix40() []byte {
@@ -40,12 +41,12 @@ func mustWrite(name string, data []byte) error {
 }
 
 func main() {
-	act := flag.String("act", "", "tool action [send/gen/base32/newkey/des/api/chk/read]")
+	act := flag.String("act", "", "tool action [send/gen/base32/newkey/des/api/chk/read/init]")
     nextAddr := flag.String("addr", "http://127.0.0.1:8888", "send msg/api addr")
 	nextAuth := flag.String("auth", "12345678", "send msg/api auth")
 	pkeyN := flag.String("pkey", "pkey", "pkey name")
 	apiSvc := flag.String("svc", "neighbor", "api service name")
-	apiReq := flag.String("req", "", "api/read request name")
+	apiReq := flag.String("req", "", "api/read/init request name")
 	Ner_opt := flag.String("opt", "", "api set key(optional) [key=123456789&rpm=60&url=http://yoururl]")
 	flag.Parse()
 	pkey_name:=*pkeyN
@@ -298,8 +299,60 @@ func main() {
 		fmt.Println(string(txt))
 		return
 	}
+	case "init":{
+		fmt.Println("INFO: init index flie")
+		exePath, err := os.Executable()
+		if err != nil {
+			fmt.Println("ERR: find path err:",err)
+			return
+        }
+		BaseDir := filepath.Join(filepath.Dir(exePath), "kep-data")
+		if _, err := os.Stat(BaseDir); os.IsNotExist(err) {
+			err=os.Mkdir(BaseDir, 0755)
+			if err != nil {
+				fmt.Println("ERR: mkdir:",err)
+				return
+			}
+		}
+		set_tag:=0
+		if *apiReq!=""{
+			set_tag,err=strconv.Atoi(*apiReq)
+			if err!=nil{
+				fmt.Println("ERR: set tag name err:",err)
+				return
+			}
+		}
+		
+		idxPath := filepath.Join(BaseDir, "tag_"+strconv.Itoa(set_tag)+".idx")
+		_,err= os.Stat(idxPath)
+		if err != nil && os.IsNotExist(err) {
+			fmt.Println("INFO: create index:",idxPath)
+			f,err:= os.OpenFile(idxPath, os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				fmt.Println("ERR: create index file:",err)
+				return
+			}
+			f.Close()
+		}
+		if set_tag ==0 {
+			for i:=1;i<12;i++{
+				idxPath = filepath.Join(BaseDir, "tag_"+strconv.Itoa(i)+".idx")
+			   _,err= os.Stat(idxPath)
+				if err != nil && os.IsNotExist(err) {
+					fmt.Println("INFO: create index:",idxPath)
+					f,err:= os.OpenFile(idxPath, os.O_CREATE|os.O_WRONLY, 0644)
+					if err != nil {
+						fmt.Println("ERR: create index file:",err)
+						return
+					}
+					f.Close()
+				}
+			}
+		}
+		fmt.Println("Done: init index: create index OK")
+	}
     default:
-        fmt.Println("usage:\n\t-act [send/gen/base32/newkey/des/api/chk/read] -pkey [pkeyName] -addr [http://web] -auth [token]")
+        fmt.Println("usage:\n\t-act [send/gen/base32/newkey/des/api/chk/read/init] -pkey [pkeyName] -addr [http://web] -auth [token]")
     }
 }
 func sendmsg(nextroute []send.NextMsg){
