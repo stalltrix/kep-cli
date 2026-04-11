@@ -41,7 +41,7 @@ func mustWrite(name string, data []byte) error {
 }
 
 func main() {
-	act := flag.String("act", "", "tool action [send/gen/base32/newkey/des/api/chk/read/init]")
+	act := flag.String("act", "", "tool action [send/gen/base32/newkey/des/api/chk/read/init/test]")
     nextAddr := flag.String("addr", "http://127.0.0.1:8888", "send msg/api addr")
 	nextAuth := flag.String("auth", "12345678", "send msg/api auth")
 	pkeyN := flag.String("pkey", "pkey", "pkey name")
@@ -351,8 +351,35 @@ func main() {
 		}
 		fmt.Println("Done: init index: create index OK")
 	}
+	case "test":{
+        fmt.Println("start url-test:",*nextAddr)
+		client,err := send.NewMsgClient(*nextAddr,*nextAuth)
+		if err !=nil {
+			s:=err.Error()
+			i:=strings.LastIndex(s,`s":`)
+			if i!=-1&&i+1<len(s){
+				fmt.Print("ERR: url-test \"init",s[i+1:])
+			} else {
+				fmt.Println("ERR: url-test init:",s)
+			}
+			return
+		}
+		defer client.Close()
+		body,err:=client.Send("ping", nil)
+		if err !=nil {
+			s:=err.Error()
+			i:=strings.LastIndex(s,`s":`)
+			if i!=-1&&i+1<len(s){
+				fmt.Print("ERR: url-test \"fail",s[i+1:])
+			} else {
+				fmt.Println("ERR: url-test fail:",s)
+			}
+			return
+		}
+		fmt.Println("url-test:",string(body))
+	}
     default:
-        fmt.Println("usage:\n\t-act [send/gen/base32/newkey/des/api/chk/read/init] -pkey [pkeyName] -addr [http://web] -auth [token]")
+        fmt.Println("usage:\n\t-act [send/gen/base32/newkey/des/api/chk/read/init/test] -pkey [pkeyName] -addr [http://web] -auth [token]")
     }
 }
 func sendmsg(nextroute []send.NextMsg){
