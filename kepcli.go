@@ -41,6 +41,12 @@ func mustWrite(name string, data []byte) error {
 }
 
 func main() {
+	if len(os.Args) > 1 && !strings.HasPrefix(os.Args[1], "-") {
+        os.Args = append(
+            []string{os.Args[0], "-act", os.Args[1]},
+            os.Args[2:]...,
+        )
+    }
 	act := flag.String("act", "", "tool action [send/gen/base32/newkey/des/api/chk/read/init/test]")
     nextAddr := flag.String("addr", "http://127.0.0.1:8888", "send msg/api addr")
 	nextAuth := flag.String("auth", "12345678", "send msg/api auth")
@@ -79,6 +85,11 @@ func main() {
 		fmt.Println("mainkey.pub :", hex.EncodeToString(mainPub))
 		fmt.Println(pkey_name+".pub    :", hex.EncodeToString(pub))
 		fmt.Println(pkey_name+".sig    :", hex.EncodeToString(signKey))
+		fmt.Println("=========================\n")
+		fmt.Println("mainkey base32:", strings.ReplaceAll(base32.StdEncoding.EncodeToString(mainPub), "=", ""))
+		h := fnv.New64a()
+		h.Write(pub)
+		fmt.Println(pkey_name+" des:", fmt.Sprintf("%x", h.Sum64()))
 	}
     case "base32":{
         data, err := os.ReadFile("mainkey.pub")

@@ -34,6 +34,30 @@ kepcli -act newkey -pkey mykey
 kepcli -act send -addr [http://web] -auth [token]
 ```
 
+<br>
+
+---
+
+### 注意
+
+v0.1.7开始，可以省略`cli -act cmd`的flags显示指定，可直接在末尾输入命令`cli cmd`
+
+```bash
+kepcli gen
+
+kepcli base32
+
+kepcli newkey -pkey mykey
+
+kepcli send -addr [http://web] -auth [token]
+```
+
+<br>
+
+---
+
+### 其他事项
+
 如果使用send，那么-addr [http://web] -auth [token]是必须的
 
 不过建议新手send操作直接使用网页端发送，更加方便，同时不容易出错
