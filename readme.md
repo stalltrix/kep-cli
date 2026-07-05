@@ -5,23 +5,30 @@
 1.生成完全证书(包括 mainkey,pkey,sig)
 
 ```bash
-kepcli -act gen
+kepcli gen
 ```
 
 <br>
 
-2.获取mainkey的base32
+2.获取key的dns基础txt记录
 
 ```bash
-kepcli -act base32
+kepcli dnstxt
+```
+
+此dns记录为mainkey的base32以及pkey的des，也可手动两步获取
+
+```bash
+kepcli base32
+kepcli des
 ```
 
 <br>
 
-3.以主mainkey获取新的pkey(子密钥)
+3.以主密钥mainkey获取新的pkey(子密钥)
 
 ```bash
-kepcli -act newkey -pkey mykey
+kepcli newkey -pkey mykey
 ```
 
 -pkey可选参数
@@ -31,26 +38,30 @@ kepcli -act newkey -pkey mykey
 4.发送msg
 
 ```bash
-kepcli -act send -addr [http://web] -auth [token]
+kepcli send -addr [http://web] -auth [token]
+```
+
+<br>
+
+5.初始化索引
+
+```bash
+kepcli init
+```
+
+<br>
+
+6.检查索引是否损坏
+
+```bash
+kepcli chk
 ```
 
 <br>
 
 ---
 
-### 注意
-
-v0.1.7开始，可以省略`cli -act cmd`的flags显示指定，可直接在末尾输入命令`cli cmd`
-
-```bash
-kepcli gen
-
-kepcli base32
-
-kepcli newkey -pkey mykey
-
-kepcli send -addr [http://web] -auth [token]
-```
+在v0.1.7以前，需要添加`cli -act cmd`的flags显示指定，高于此版本可直接在末尾输入命令`cli cmd`
 
 <br>
 

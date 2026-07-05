@@ -47,13 +47,14 @@ func main() {
             os.Args[2:]...,
         )
     }
-	act := flag.String("act", "", "tool action [send/gen/base32/newkey/des/api/chk/read/init/test]")
+	act := flag.String("act", "", "tool action [send/gen/dnstxt/base32/newkey/des/api/chk/read/init/test]")
     nextAddr := flag.String("addr", "http://127.0.0.1:8888", "send msg/api addr")
 	nextAuth := flag.String("auth", "12345678", "send msg/api auth")
 	pkeyN := flag.String("pkey", "pkey", "pkey name")
 	apiSvc := flag.String("svc", "neighbor", "api service name")
 	apiReq := flag.String("req", "", "api/read/init request name")
 	Ner_opt := flag.String("opt", "", "api set key(optional) [key=123456789&rpm=60&url=http://yoururl]")
+	skipSSL := flag.Bool("insecure", false, "Allow insecure server connections when using SSL")
 	flag.Parse()
 	pkey_name:=*pkeyN
 
@@ -62,7 +63,7 @@ func main() {
 	nextroute:=make([]send.NextMsg,1)
 	nextroute[0].Addr=*nextAddr
 	nextroute[0].Auth=*nextAuth
-	sendmsg(nextroute)
+	sendmsg(nextroute,*skipSSL)
 	}
     case "gen":{
 		mainPub, mainPriv,err:=keygen.Gen_mainkey()
@@ -91,7 +92,28 @@ func main() {
 		h.Write(pub)
 		fmt.Println(pkey_name+" des:", fmt.Sprintf("%x", h.Sum64()))
 	}
-    case "base32":{
+    case "dnstxt":{
+		{
+		data, err := os.ReadFile("mainkey.pub")
+		if err != nil {
+			fmt.Println("mainkey:",err)
+			return
+		}
+		fmt.Println("mainkey base32:",strings.ReplaceAll(base32.StdEncoding.EncodeToString(data), "=", ""))
+		}
+		
+		{
+		data, err := os.ReadFile(pkey_name+".pub")
+		if err != nil {
+			fmt.Println(pkey_name+".pub:",err)
+			return
+		}
+		h := fnv.New64a()
+		h.Write(data)
+		fmt.Println(pkey_name+" des:", fmt.Sprintf("%x", h.Sum64()))
+		}
+	}
+	case "base32":{
         data, err := os.ReadFile("mainkey.pub")
 		if err != nil {
 			fmt.Println("mainkey:",err)
@@ -346,7 +368,7 @@ func main() {
 			f.Close()
 		}
 		if set_tag ==0 {
-			for i:=1;i<12;i++{
+			for i:=1;i<16;i++{
 				idxPath = filepath.Join(BaseDir, "tag_"+strconv.Itoa(i)+".idx")
 			   _,err= os.Stat(idxPath)
 				if err != nil && os.IsNotExist(err) {
@@ -364,7 +386,7 @@ func main() {
 	}
 	case "test":{
         fmt.Println("start url-test:",*nextAddr)
-		client,err := send.NewMsgClient(*nextAddr,*nextAuth)
+		client,err := send.NewMsgClient(*nextAddr,*nextAuth,*skipSSL)
 		if err !=nil {
 			s:=err.Error()
 			i:=strings.LastIndex(s,`s":`)
@@ -390,10 +412,10 @@ func main() {
 		fmt.Println("url-test:",string(body))
 	}
     default:
-        fmt.Println("usage:\n\t-act [send/gen/base32/newkey/des/api/chk/read/init/test] -pkey [pkeyName] -addr [http://web] -auth [token]")
+        fmt.Println("usage:\n\t-act [send/gen/dnstxt/base32/newkey/des/api/chk/read/init/test] -pkey [pkeyName] -addr [http://web] -auth [token]")
     }
 }
-func sendmsg(nextroute []send.NextMsg){
+func sendmsg(nextroute []send.NextMsg,skipsslchk bool){
 	send.Send_Init(nextroute,"")
 	var mainPub,priv,signKey,pub []byte
 	var err error
@@ -492,7 +514,7 @@ func sendmsg(nextroute []send.NextMsg){
 
     msg := buf.Bytes()
 	
-	err = send.Nextmsg(msg,"")
+	err = send.Nextmsg(msg,"",skipsslchk)
 	if err != nil {
 		fmt.Println("send msg err:",err)
 	} else {
