@@ -14,7 +14,9 @@ import (
 	"github.com/stalltrix/kep-demo/send"
 	"flag"
 	"github.com/stalltrix/kep-cli/keygen"
+	"github.com/stalltrix/kep-cli/keyencode"
 	"encoding/base32"
+	"encoding/base64"
 	"hash/fnv"
 	"net/url"
 	"net/http"
@@ -36,8 +38,37 @@ func unix40() []byte {
     return b[:]
 }
 
-func mustWrite(name string, data []byte) error {
-    return os.WriteFile(name, data, 0600);
+func mustWrite(name string, data []byte) {
+    err:=os.WriteFile(name, data, 0600);
+	if err!=nil {
+		fmt.Println("fatal:",err)
+		os.Exit(-1)
+	}
+	return
+}
+
+func keyWrite(name string,key []byte) {
+	if len(key)==32{
+		pem,err:=keyencode.Key32_encode(key)
+		if err!=nil {
+			fmt.Println("key fatal:",err)
+			os.Exit(-1)
+			return
+		}
+		mustWrite(name,pem)
+	} else if len(key)==64{ 
+		pem,err:=keyencode.Key64_encode(key)
+		if err!=nil {
+			fmt.Println("key fatal:",err)
+			os.Exit(-1)
+			return
+		}
+		mustWrite(name,pem)
+	}else {
+		fmt.Println("key fatal: len not match")
+		os.Exit(-1)
+	}
+	return
 }
 
 func main() {
@@ -47,12 +78,12 @@ func main() {
             os.Args[2:]...,
         )
     }
-	act := flag.String("act", "", "tool action [send/gen/dnstxt/base32/newkey/des/api/chk/read/init/test]")
+	act := flag.String("act", "", "tool action [send/gen/dnstxt/base32/newkey/des/api/chk/read/init/test/transkey]")
     nextAddr := flag.String("addr", "http://127.0.0.1:8888", "send msg/api addr")
 	nextAuth := flag.String("auth", "12345678", "send msg/api auth")
 	pkeyN := flag.String("pkey", "pkey", "pkey name")
 	apiSvc := flag.String("svc", "neighbor", "api service name")
-	apiReq := flag.String("req", "", "api/read/init request name")
+	apiReq := flag.String("req", "", "using for [api/read/init/gen] request name")
 	Ner_opt := flag.String("opt", "", "api set key(optional) [key=123456789&rpm=60&url=http://yoururl]")
 	skipSSL := flag.Bool("insecure", false, "Allow insecure server connections when using SSL")
 	flag.Parse()
@@ -63,6 +94,7 @@ func main() {
 	nextroute:=make([]send.NextMsg,1)
 	nextroute[0].Addr=*nextAddr
 	nextroute[0].Auth=*nextAuth
+	kepdb.Init_path("")
 	sendmsg(nextroute,*skipSSL)
 	}
     case "gen":{
@@ -77,26 +109,44 @@ func main() {
 			return
 		}
 		signKey:=keygen.Sig_pkey(pub, mainPriv)
-		mustWrite("mainkey.pub", mainPub)
-		mustWrite("mainkey.priv", mainPriv)
-		mustWrite(pkey_name+".pub", pub)
-		mustWrite(pkey_name+".priv", priv)
-		mustWrite(pkey_name+".sig", signKey)
+		if *apiReq!="raw" {
+			keyWrite("mainkey.pub", mainPub)
+			keyWrite("mainkey.priv", mainPriv)
+			keyWrite(pkey_name+".pub", pub)
+			keyWrite(pkey_name+".priv", priv)
+			keyWrite(pkey_name+".sig", signKey)
+		} else {
+			mustWrite("mainkey.pub", mainPub)
+			mustWrite("mainkey.priv", mainPriv)
+			mustWrite(pkey_name+".pub", pub)
+			mustWrite(pkey_name+".priv", priv)
+			mustWrite(pkey_name+".sig", signKey)
+		}
 		fmt.Println("key generation complete")
 		fmt.Println("mainkey.pub :", hex.EncodeToString(mainPub))
 		fmt.Println(pkey_name+".pub    :", hex.EncodeToString(pub))
 		fmt.Println(pkey_name+".sig    :", hex.EncodeToString(signKey))
 		fmt.Println("=========================\n")
-		fmt.Println("mainkey base32:", strings.ReplaceAll(base32.StdEncoding.EncodeToString(mainPub), "=", ""))
+		base32key:=strings.ReplaceAll(base32.StdEncoding.EncodeToString(mainPub), "=", "")
+		fmt.Println("mainkey base32:", base32key)
 		h := fnv.New64a()
 		h.Write(pub)
-		fmt.Println(pkey_name+" des:", fmt.Sprintf("%x", h.Sum64()))
+		deskey:=fmt.Sprintf("%x", h.Sum64())
+		fmt.Println(pkey_name+" des:", deskey)
+		
+		keyInfo:="generate Time : "+time.Now().Format("2006-01-02 15:04:05.000")+"\n\n========key base64========\n\nmainkey base64: "+base64.StdEncoding.EncodeToString(mainPub)+"\n"+pkey_name+" base64   :  "+base64.StdEncoding.EncodeToString(pub)+"\nsignkey base64: "+base64.StdEncoding.EncodeToString(signKey)+"\n\n========dns txt========\n\nmainkey base32: "+base32key+"\n"+pkey_name+" des  :  "+deskey
+		mustWrite("genkey.log", []byte(keyInfo))
 	}
     case "dnstxt":{
 		{
 		data, err := os.ReadFile("mainkey.pub")
 		if err != nil {
 			fmt.Println("mainkey:",err)
+			return
+		}
+		data,err=keyencode.AutoDecode(data)
+		if err != nil {
+			fmt.Println("key decode:",err)
 			return
 		}
 		fmt.Println("mainkey base32:",strings.ReplaceAll(base32.StdEncoding.EncodeToString(data), "=", ""))
@@ -106,6 +156,11 @@ func main() {
 		data, err := os.ReadFile(pkey_name+".pub")
 		if err != nil {
 			fmt.Println(pkey_name+".pub:",err)
+			return
+		}
+		data,err=keyencode.AutoDecode(data)
+		if err != nil {
+			fmt.Println("key decode:",err)
 			return
 		}
 		h := fnv.New64a()
@@ -119,6 +174,11 @@ func main() {
 			fmt.Println("mainkey:",err)
 			return
 		}
+		data,err=keyencode.AutoDecode(data)
+		if err != nil {
+			fmt.Println("key decode:",err)
+			return
+		}
 		encoded := base32.StdEncoding.EncodeToString(data)
 		fmt.Println("mainkey base32:",strings.ReplaceAll(encoded, "=", ""))
 	}
@@ -128,15 +188,26 @@ func main() {
 			fmt.Println("mainkey:",err)
 			return
 		}
+		mainPriv,err=keyencode.AutoDecode(mainPriv)
+		if err != nil {
+			fmt.Println("key decode:",err)
+			return
+		}
 		pub, priv, err:=keygen.Gen_pkey()
         if err!=nil{
 			fmt.Println("pkey:",err)
 			return
 		}
 		signKey:=keygen.Sig_pkey(pub, mainPriv)
-		mustWrite(pkey_name+".pub", pub)
-		mustWrite(pkey_name+".priv", priv)
-		mustWrite(pkey_name+".sig", signKey)
+		if *apiReq!="raw" {
+			keyWrite(pkey_name+".pub", pub)
+			keyWrite(pkey_name+".priv", priv)
+			keyWrite(pkey_name+".sig", signKey)
+		} else {
+			mustWrite(pkey_name+".pub", pub)
+			mustWrite(pkey_name+".priv", priv)
+			mustWrite(pkey_name+".sig", signKey)
+		}
 		fmt.Println("new pkey generation complete")
 		fmt.Println(pkey_name+".pub    :", hex.EncodeToString(pub))
 		fmt.Println(pkey_name+".sig    :", hex.EncodeToString(signKey))
@@ -145,6 +216,11 @@ func main() {
         data, err := os.ReadFile(pkey_name+".pub")
 		if err != nil {
 			fmt.Println(pkey_name+".pub:",err)
+			return
+		}
+		data,err=keyencode.AutoDecode(data)
+		if err != nil {
+			fmt.Println("key decode:",err)
 			return
 		}
 		h := fnv.New64a()
@@ -411,8 +487,77 @@ func main() {
 		}
 		fmt.Println("url-test:",string(body))
 	}
+	case "transkey":{
+	var mainPub,mainPriv,priv,signKey,pub []byte
+	var err error
+	mainPub, err = os.ReadFile("mainkey.pub")
+    if err == nil {
+        mainPub,err=keyencode.AutoDecode(mainPub)
+		if err != nil {
+			fmt.Println("key decode:",err)
+			return
+		}
+    }
+
+	mainPriv, err = os.ReadFile("mainkey.priv")
+    if err == nil {
+        mainPriv,err=keyencode.AutoDecode(mainPriv)
+		if err != nil {
+			fmt.Println("key decode:",err)
+			return
+		}
+    }
+
+	pub, err = os.ReadFile(pkey_name+".pub")
+    if err == nil {
+        pub,err=keyencode.AutoDecode(pub)
+		if err != nil {
+			fmt.Println("key decode:",err)
+			return
+		}
+    }
+
+    priv, err = os.ReadFile(pkey_name+".priv")
+    if err == nil {
+        priv,err=keyencode.AutoDecode(priv)
+		if err != nil {
+			fmt.Println("key decode:",err)
+			return
+		}
+    }
+
+    signKey, err = os.ReadFile(pkey_name+".sig")
+    if err == nil {
+        signKey,err=keyencode.AutoDecode(signKey)
+		if err != nil {
+			fmt.Println("key decode:",err)
+			return
+		}
+    }
+	
+	if *apiReq!="raw" {
+		if mainPub!=nil{keyWrite("mainkey.pub.trans", mainPub);}
+		if mainPriv!=nil{keyWrite("mainkey.priv.trans", mainPriv);}
+		if pub!=nil{keyWrite(pkey_name+".pub.trans", pub);}
+		if priv!=nil{keyWrite(pkey_name+".priv.trans", priv);}
+		if signKey!=nil{keyWrite(pkey_name+".sig.trans", signKey);}
+	} else {
+		if mainPub!=nil{mustWrite("mainkey.pub.trans", mainPub);}
+		if mainPriv!=nil{mustWrite("mainkey.priv.trans", mainPriv);}
+		if pub!=nil{mustWrite(pkey_name+".pub.trans", pub);}
+		if priv!=nil{mustWrite(pkey_name+".priv.trans", priv);}
+		if signKey!=nil{mustWrite(pkey_name+".sig.trans", signKey);}
+	}
+	fmt.Println("key transform complete")
+	}
     default:
-        fmt.Println("usage:\n\t-act [send/gen/dnstxt/base32/newkey/des/api/chk/read/init/test] -pkey [pkeyName] -addr [http://web] -auth [token]")
+        fmt.Println("usage:\n\t-act [send/gen/dnstxt/base32/newkey/des/api/chk/read/init/test/transkey] -pkey [pkeyName] -addr [http://web] -auth [token]\n")
+		fmt.Println("flags of -req [api/read/init/gen]")
+		fmt.Println("\t[api] using for '-act api',-req value=[request name] like [list]")
+		fmt.Println("\t[read] using for '-act read',-req value=[posthex]")
+		fmt.Println("\t[init] using for '-act init',-req value=0-N/default")
+		fmt.Println("\t[gen] using for '-act [gen/transkey]',-req value=raw/default")
+		fmt.Println("use '-h' for more info")
     }
 }
 func sendmsg(nextroute []send.NextMsg,skipsslchk bool){
@@ -424,23 +569,44 @@ func sendmsg(nextroute []send.NextMsg,skipsslchk bool){
         fmt.Println("mainkey:",err)
 		return
     }
+	mainPub,err=keyencode.AutoDecode(mainPub)
+	if err != nil {
+		fmt.Println("key decode:",err)
+		return
+	}
+		
 	pub, err = os.ReadFile("pkey.pub")
     if err != nil {
         fmt.Println("pkey:",err)
 		return
     }
+	pub,err=keyencode.AutoDecode(pub)
+	if err != nil {
+		fmt.Println("key decode:",err)
+		return
+	}
 	
     priv, err = os.ReadFile("pkey.priv")
     if err != nil {
         fmt.Println("pkey:",err)
 		return
     }
+	priv,err=keyencode.AutoDecode(priv)
+	if err != nil {
+		fmt.Println("key decode:",err)
+		return
+	}
 
     signKey, err = os.ReadFile("pkey.sig")
     if err != nil {
         fmt.Println("pkey:",err)
 		return
     }
+	signKey,err=keyencode.AutoDecode(signKey)
+	if err != nil {
+		fmt.Println("key decode:",err)
+		return
+	}
 	
 	reader := bufio.NewReader(os.Stdin)
 
