@@ -47,7 +47,7 @@ func mustWrite(name string, data []byte) {
 	return
 }
 
-func keyWrite(name string,key []byte) {
+func keyWrite(name string,key []byte,keytype string) {
 	if len(key)==32{
 		pem,err:=keyencode.Key32_encode(key)
 		if err!=nil {
@@ -56,7 +56,17 @@ func keyWrite(name string,key []byte) {
 			return
 		}
 		mustWrite(name,pem)
-	} else if len(key)==64{ 
+	} else if len(key)==64{
+		if keytype=="pkcs" {
+			pem,err:=keyencode.PKCS_encode(key)
+			if err!=nil {
+				fmt.Println("key fatal:",err)
+				os.Exit(-1)
+				return
+			}
+			mustWrite(name,pem)
+			return
+		}
 		pem,err:=keyencode.Key64_encode(key)
 		if err!=nil {
 			fmt.Println("key fatal:",err)
@@ -110,11 +120,11 @@ func main() {
 		}
 		signKey:=keygen.Sig_pkey(pub, mainPriv)
 		if *apiReq!="raw" {
-			keyWrite("mainkey.pub", mainPub)
-			keyWrite("mainkey.priv", mainPriv)
-			keyWrite(pkey_name+".pub", pub)
-			keyWrite(pkey_name+".priv", priv)
-			keyWrite(pkey_name+".sig", signKey)
+			keyWrite("mainkey.pub", mainPub,"")
+			keyWrite("mainkey.priv", mainPriv,*apiReq)
+			keyWrite(pkey_name+".pub", pub,"")
+			keyWrite(pkey_name+".priv", priv,*apiReq)
+			keyWrite(pkey_name+".sig", signKey,"")
 		} else {
 			mustWrite("mainkey.pub", mainPub)
 			mustWrite("mainkey.priv", mainPriv)
@@ -200,9 +210,9 @@ func main() {
 		}
 		signKey:=keygen.Sig_pkey(pub, mainPriv)
 		if *apiReq!="raw" {
-			keyWrite(pkey_name+".pub", pub)
-			keyWrite(pkey_name+".priv", priv)
-			keyWrite(pkey_name+".sig", signKey)
+			keyWrite(pkey_name+".pub", pub,"")
+			keyWrite(pkey_name+".priv", priv,*apiReq)
+			keyWrite(pkey_name+".sig", signKey,"")
 		} else {
 			mustWrite(pkey_name+".pub", pub)
 			mustWrite(pkey_name+".priv", priv)
@@ -536,11 +546,11 @@ func main() {
     }
 	
 	if *apiReq!="raw" {
-		if mainPub!=nil{keyWrite("mainkey.pub.trans", mainPub);}
-		if mainPriv!=nil{keyWrite("mainkey.priv.trans", mainPriv);}
-		if pub!=nil{keyWrite(pkey_name+".pub.trans", pub);}
-		if priv!=nil{keyWrite(pkey_name+".priv.trans", priv);}
-		if signKey!=nil{keyWrite(pkey_name+".sig.trans", signKey);}
+		if mainPub!=nil{keyWrite("mainkey.pub.trans", mainPub,"");}
+		if mainPriv!=nil{keyWrite("mainkey.priv.trans", mainPriv,*apiReq);}
+		if pub!=nil{keyWrite(pkey_name+".pub.trans", pub,"");}
+		if priv!=nil{keyWrite(pkey_name+".priv.trans", priv,*apiReq);}
+		if signKey!=nil{keyWrite(pkey_name+".sig.trans", signKey,"");}
 	} else {
 		if mainPub!=nil{mustWrite("mainkey.pub.trans", mainPub);}
 		if mainPriv!=nil{mustWrite("mainkey.priv.trans", mainPriv);}
@@ -556,7 +566,7 @@ func main() {
 		fmt.Println("\t[api] using for '-act api',-req value=[request name] like [list]")
 		fmt.Println("\t[read] using for '-act read',-req value=[posthex]")
 		fmt.Println("\t[init] using for '-act init',-req value=0-N/default")
-		fmt.Println("\t[gen] using for '-act [gen/transkey]',-req value=raw/default")
+		fmt.Println("\t[gen] using for '-act [gen/transkey]',-req value=raw/pkcs/default")
 		fmt.Println("use '-h' for more info")
     }
 }
