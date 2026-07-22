@@ -96,6 +96,7 @@ func main() {
 	apiReq := flag.String("req", "", "using for [api/read/init/gen] request name")
 	Ner_opt := flag.String("opt", "", "api set key(optional) [key=123456789&rpm=60&url=http://yoururl]")
 	skipSSL := flag.Bool("insecure", false, "Allow insecure server connections when using SSL")
+	connVia := flag.String("socks5", "", "connect via socks5")
 	flag.Parse()
 	pkey_name:=*pkeyN
 
@@ -105,7 +106,7 @@ func main() {
 	nextroute[0].Addr=*nextAddr
 	nextroute[0].Auth=*nextAuth
 	kepdb.Init_path("")
-	sendmsg(nextroute,*skipSSL)
+	sendmsg(nextroute,*skipSSL,*connVia)
 	}
     case "gen":{
 		mainPub, mainPriv,err:=keygen.Gen_mainkey()
@@ -471,6 +472,9 @@ func main() {
 		fmt.Println("Done: init index: create index OK")
 	}
 	case "test":{
+		if *connVia!=""{
+			send.Send_Init(nil,*connVia,*skipSSL)
+		}
         fmt.Println("start url-test:",*nextAddr)
 		client,err := send.NewMsgClient(*nextAddr,*nextAuth,*skipSSL)
 		if err !=nil {
@@ -570,8 +574,8 @@ func main() {
 		fmt.Println("use '-h' for more info")
     }
 }
-func sendmsg(nextroute []send.NextMsg,skipsslchk bool){
-	send.Send_Init(nextroute,"")
+func sendmsg(nextroute []send.NextMsg,skipsslchk bool,addr string){
+	send.Send_Init(nextroute,addr,skipsslchk)
 	var mainPub,priv,signKey,pub []byte
 	var err error
     mainPub, err = os.ReadFile("mainkey.pub")
